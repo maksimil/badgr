@@ -3,10 +3,11 @@ package api
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
+	"text/template"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -70,20 +71,100 @@ func textLength(text string) (int, error) {
 }
 
 var (
-	svgtemplate = "<svg width=\"{{.Width}}mm\" height=\"{{.Height}}mm\" " +
+	SVG_TEMPLATE_SRC = "<svg width=\"{{.Width}}mm\" height=\"{{.Height}}mm\" " +
 		"xmlns=\"http://www.w3.org/2000/svg\" " +
-		"style=\"font-family:Arial;\"> " +
-		"<text x=\"50%\" y=\"50%\" text-anchor=\"middle\" " +
-		"style=\"font-size:{{.Font}}px\">{{.Name}}</text></svg>"
-	width  = 210
-	height = 297
+		"style=\"font-family:Arial; background:white;\">{{.Contents}}</svg>"
+	SVG_TEMPLATE = template.Must(template.New("main svg").Parse(SVG_TEMPLATE_SRC))
+
+	TEXTBOX_TEMPLATE_SRC = "<text x=\"{{.X}}%\" y=\"{{.Y}}%\" " +
+		"text-anchor=\"middle\" style=\"font-size:{{.FontSize}}px\">" +
+		"{{.Text}}</text>"
+	TEXTBOX_TEMPLATE = template.Must(template.New("textbox").Parse(TEXTBOX_TEMPLATE_SRC))
+
+	PAGE_WIDTH  = 210.
+	PAGE_HEIGHT = 297.
+
+	PXTOMM = 0.2645833333
+	MMTOPX = 3.7795275591
 )
+
+type TemplateConstructor struct {
+	PerHeight int
+	PerWidth  int
+	TextBoxes []TextBox
+}
+
+type TextBox struct {
+	X         float64
+	Y         float64
+	Width     float64
+	Height    float64
+	ParamName string
+}
+
+func createSvg(
+	constructor TemplateConstructor,
+	data map[string]string) (string, error) {
+
+	width := PAGE_WIDTH / float64(constructor.PerWidth)
+	height := PAGE_HEIGHT / float64(constructor.PerHeight)
+
+	contents := ""
+	for _, box := range constructor.TextBoxes {
+		text := data[box.ParamName]
+		tlength, err := textLength(text)
+		if err != nil {
+			log.Error().Err(err).Msg("Error in measuring text")
+			return "", err
+		}
+		var contentsdata struct {
+			X        float64
+			Y        float64
+			FontSize float64
+			Text     string
+		}
+		contentsdata.X = box.X
+		contentsdata.Y = box.Y
+		contentsdata.Text = data[box.ParamName]
+		contentsdata.FontSize = math.Min(16*MMTOPX*width*
+			(box.Width/100.0)/float64(tlength), box.Height/100.0*height*MMTOPX)
+
+		var textbox bytes.Buffer
+		err = TEXTBOX_TEMPLATE.Execute(&textbox, contentsdata)
+		if err != nil {
+			log.Error().Err(err).Msg("Error in executing template")
+			return "", err
+		}
+
+		contents += textbox.String()
+	}
+
+	var svgdata struct {
+		Width    float64
+		Height   float64
+		Contents string
+	}
+
+	svgdata.Width = width
+	svgdata.Height = height
+	svgdata.Contents = contents
+
+	var output bytes.Buffer
+	err := SVG_TEMPLATE.Execute(&output, svgdata)
+
+	if err != nil {
+		log.Error().Err(err).Msg("Error in executing template")
+		return "", err
+	}
+
+	return output.String(), nil
+}
 
 type Params struct {
 	Name   string
-	Width  float32
-	Height float32
-	Font   float32
+	Width  float64
+	Height float64
+	Font   float64
 }
 
 func Handle(w http.ResponseWriter, r *http.Request) {
@@ -98,31 +179,24 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.New("svg").Parse(svgtemplate)
-	if err != nil {
-		log.Error().Err(err).Msg("Err on parsing template")
-		http.Error(w, "Err on parsing template", http.StatusInternalServerError)
-		return
+	data := map[string]string{"name": "Ksyk"}
+	constructor := TemplateConstructor{
+		PerWidth:  2,
+		PerHeight: 4,
+		TextBoxes: []TextBox{{
+			X:         50,
+			Y:         70,
+			Width:     75,
+			Height:    50,
+			ParamName: "name",
+		}},
 	}
 
-	var buf bytes.Buffer
-	data := Params{"aa;sdfKsykaa", float32(width) / 2, float32(height) / 4, 0}
-
-	tlength, err := textLength(data.Name)
+	output, err := createSvg(constructor, data)
 	if err != nil {
-		log.Error().Err(err).Msg("Error in measuring string length")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
-	data.Font = 60.4724409456 * float32(data.Width) / float32(tlength)
-
-	err = tmpl.Execute(&buf, data)
-	if err != nil {
-		log.Error().Err(err).Msg("Err on executing template")
-		http.Error(w, "Err on executing template", http.StatusInternalServerError)
-		return
+		log.Error().Err(err).Msg("Error in creating svg")
+		http.Error(w, "Err in creating svg", http.StatusInternalServerError)
 	}
 
-	log.Info().Str("svg", buf.String()).Msg("Created and sent svg")
-
-	fmt.Fprint(w, buf.String())
+	fmt.Fprint(w, output)
 }
