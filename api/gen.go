@@ -9,6 +9,7 @@ import (
 	"os"
 	"text/template"
 
+	"github.com/maksimil/badgr/api/lib"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/image/font/opentype"
@@ -186,6 +187,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
+	lib.Ppr()
 	data := map[string]string{"fname": "Ksenya", "lname": "Kosterova"}
 	constructor := TemplateConstructor{
 		PerWidth:  2,

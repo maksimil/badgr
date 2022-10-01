@@ -1,6 +1,6 @@
 module github.com/maksimil/badgr/api
 
-go 1.19
+go 1.18
 
 require (
 	github.com/rs/zerolog v1.28.0
