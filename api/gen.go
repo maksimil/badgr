@@ -32,60 +32,67 @@ func homeUrl() string {
 	}
 }
 
-func textLength(text string) (int, error) {
+func textSize(text string) ([2]int, error) {
 	resp, err := http.Get(homeUrl() + "/assets/arial.ttf")
 	if err != nil {
-		return 0, err
+		return [2]int{0, 0}, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		return [2]int{0, 0}, err
 	}
 
 	font, err := opentype.ParseReaderAt(bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return [2]int{0, 0}, err
 	}
 
 	var b sfnt.Buffer
 
 	totaladv := fixed.Int26_6(0)
+	height := 0
 
 	for _, c := range text {
 		idx, err := font.GlyphIndex(&b, c)
 		if err != nil {
 			continue
 		}
-		_, advance, err := font.GlyphBounds(&b, idx, fixed.Int26_6(1024), 0)
+		bounds, advance, err := font.GlyphBounds(&b, idx, fixed.Int26_6(1024), 0)
 		if err != nil {
 			continue
 		}
 		totaladv += advance
+		height = int(math.Max(float64(height),
+			float64((bounds.Max.Y - bounds.Min.Y).Round())))
 	}
 
-	log.Info().Msgf("length: %s", totaladv)
+	log.Info().Msgf("length: %v", totaladv.Round())
+	log.Info().Msgf("height: %v", height)
 
-	return totaladv.Round(), nil
+	return [2]int{totaladv.Round(), height}, nil
 }
 
 var (
 	SVG_TEMPLATE_SRC = "<svg width=\"{{.Width}}mm\" height=\"{{.Height}}mm\" " +
+		"viewBox=\"0 0 {{.Width}} {{.Height}}\" " +
 		"xmlns=\"http://www.w3.org/2000/svg\" " +
-		"style=\"font-family:Arial; background:white;\">{{.Contents}}</svg>"
+		"style=\"font-family:Arial;\">{{.Contents}}</svg>"
 	SVG_TEMPLATE = template.Must(template.New("main svg").Parse(SVG_TEMPLATE_SRC))
 
-	TEXTBOX_TEMPLATE_SRC = "<text x=\"{{.X}}%\" y=\"{{.Y}}%\" " +
-		"text-anchor=\"middle\" style=\"font-size:{{.FontSize}}px\">" +
+	TEXTBOX_TEMPLATE_SRC = "<text x=\"{{.X}}\" y=\"{{.Y}}\" " +
+		"text-anchor=\"middle\" style=\"font-size:{{.FontSize}}\">" +
 		"{{.Text}}</text>"
 	TEXTBOX_TEMPLATE = template.Must(template.New("textbox").Parse(TEXTBOX_TEMPLATE_SRC))
 
+	BOX_TEMPLATE_SRC = "<rect x=\"{{.X}}\" y=\"{{.Y}}\" " +
+		"width=\"{{.Width}}\" height=\"{{.Height}}\" fill=\"transparent\" " +
+		"style=\"stroke-width:2;stroke:rgb(0,0,0)\"/>"
+	BOX_TEMPLATE = template.Must(template.New("rect").Parse(BOX_TEMPLATE_SRC))
+
 	PAGE_WIDTH  = 210.
 	PAGE_HEIGHT = 297.
-
-	PXTOMM = 0.2645833333
-	MMTOPX = 3.7795275591
 )
 
 type TemplateConstructor struct {
@@ -112,7 +119,7 @@ func createSvg(
 	contents := ""
 	for _, box := range constructor.TextBoxes {
 		text := data[box.ParamName]
-		tlength, err := textLength(text)
+		tsize, err := textSize(text)
 		if err != nil {
 			log.Error().Err(err).Msg("Error in measuring text")
 			return "", err
@@ -126,8 +133,8 @@ func createSvg(
 		contentsdata.X = box.X
 		contentsdata.Y = box.Y
 		contentsdata.Text = data[box.ParamName]
-		contentsdata.FontSize = math.Min(16*MMTOPX*width*
-			(box.Width/100.0)/float64(tlength), box.Height/100.0*height*MMTOPX)
+		contentsdata.FontSize = math.Min(
+			16*box.Width/float64(tsize[0]), box.Height)
 
 		var textbox bytes.Buffer
 		err = TEXTBOX_TEMPLATE.Execute(&textbox, contentsdata)
@@ -179,17 +186,24 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
-	data := map[string]string{"name": "Ksyk"}
+	data := map[string]string{"fname": "Ksenya", "lname": "Kosterova"}
 	constructor := TemplateConstructor{
 		PerWidth:  2,
 		PerHeight: 4,
 		TextBoxes: []TextBox{{
-			X:         50,
-			Y:         70,
-			Width:     75,
-			Height:    50,
-			ParamName: "name",
-		}},
+			X:         PAGE_WIDTH / 4,
+			Y:         29.813,
+			Width:     92.,
+			Height:    26.5,
+			ParamName: "fname",
+		}, {
+			X:         PAGE_WIDTH / 4,
+			Y:         60.257,
+			Width:     90.476,
+			Height:    36.364,
+			ParamName: "lname",
+		},
+		},
 	}
 
 	output, err := createSvg(constructor, data)
