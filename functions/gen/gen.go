@@ -1,15 +1,15 @@
-package api
+package main
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
+
 	"io/ioutil"
 	"math"
 	"net/http"
 	"os"
 	"text/template"
 
-	"github.com/maksimil/badgr/api/lib"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/image/font/opentype"
@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	if os.Getenv("VERCEL_ENV") == "development" {
+	if os.Getenv("CONTEXT") == "dev" {
 		output := zerolog.ConsoleWriter{}
 		output.Out = os.Stderr
 		log.Logger = log.Output(output)
@@ -26,10 +26,10 @@ func init() {
 }
 
 func homeUrl() string {
-	if os.Getenv("VERCEL_ENV") == "development" {
+	if os.Getenv("CONTEXT") == "dev" {
 		return "http://localhost:3000"
 	} else {
-		return os.Getenv("VERCEL_URL")
+		return os.Getenv("URL")
 	}
 }
 
@@ -175,19 +175,7 @@ type Params struct {
 	Font   float64
 }
 
-func Handle(w http.ResponseWriter, r *http.Request) {
-	log.Info().Str("method", r.Method).Msg("Handling request")
-	switch r.Method {
-	case http.MethodGet:
-		handle(w, r)
-	default:
-		log.Error().Msg("Method not allowed")
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func handle(w http.ResponseWriter, r *http.Request) {
-	lib.Ppr()
+func GenResponse() (string, error) {
 	data := map[string]string{"fname": "Ksenya", "lname": "Kosterova"}
 	constructor := TemplateConstructor{
 		PerWidth:  2,
@@ -211,8 +199,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	output, err := createSvg(constructor, data)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in creating svg")
-		http.Error(w, "Err in creating svg", http.StatusInternalServerError)
+		return "", errors.New("error in creating svg")
 	}
 
-	fmt.Fprint(w, output)
+	return output, nil
 }

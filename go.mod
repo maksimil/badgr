@@ -1,8 +1,9 @@
-module github.com/maksimil/badgr/api
+module github.com/maksimil/badgr
 
 go 1.18
 
 require (
+	github.com/aws/aws-lambda-go v1.34.1
 	github.com/rs/zerolog v1.28.0
 	golang.org/x/image v0.0.0-20220902085622-e7cb96979f69
 )
