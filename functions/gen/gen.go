@@ -24,22 +24,20 @@ type Params struct {
 }
 
 func GenResponse() (string, error) {
-	data := map[string]string{"fname": "Ksenya", "lname": "Kosterova"}
+	data := []string{"Ksenya", "Kosterova"}
 	constructor := TemplateConstructor{
 		PerWidth:  2,
 		PerHeight: 4,
 		TextBoxes: []TextBox{{
-			X:         PAGE_WIDTH / 4,
-			Y:         29.813,
-			Width:     92.,
-			Height:    26.5,
-			ParamName: "fname",
+			X:      PAGE_WIDTH / 4,
+			Y:      29.813,
+			Width:  92.,
+			Height: 26.5,
 		}, {
-			X:         PAGE_WIDTH / 4,
-			Y:         60.257,
-			Width:     90.476,
-			Height:    36.364,
-			ParamName: "lname",
+			X:      PAGE_WIDTH / 4,
+			Y:      60.257,
+			Width:  90.476,
+			Height: 36.364,
 		},
 		},
 	}

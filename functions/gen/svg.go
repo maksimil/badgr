@@ -36,17 +36,13 @@ type TemplateConstructor struct {
 }
 
 type TextBox struct {
-	X         float64
-	Y         float64
-	Width     float64
-	Height    float64
-	ParamName string
+	X      float64
+	Y      float64
+	Width  float64
+	Height float64
 }
 
-func CreateSvg(
-	constructor TemplateConstructor,
-	data map[string]string) (string, error) {
-
+func CreateSvg(constructor TemplateConstructor, data []string) (string, error) {
 	var svgdata struct {
 		Width    float64
 		Height   float64
@@ -56,8 +52,8 @@ func CreateSvg(
 	svgdata.Height = PAGE_HEIGHT / float64(constructor.PerHeight)
 	svgdata.Contents = ""
 
-	for _, box := range constructor.TextBoxes {
-		tsize, err := textSize(data[box.ParamName])
+	for idx, box := range constructor.TextBoxes {
+		tsize, err := textSize(data[idx])
 		if err != nil {
 			log.Error().Err(err).Msg("Error in measuring text")
 			return "", err
@@ -71,7 +67,7 @@ func CreateSvg(
 		}
 		contentsdata.X = box.X
 		contentsdata.Y = box.Y
-		contentsdata.Text = data[box.ParamName]
+		contentsdata.Text = data[idx]
 		contentsdata.FontSize = math.Min(
 			16*box.Width/float64(tsize[0]), box.Height)
 
